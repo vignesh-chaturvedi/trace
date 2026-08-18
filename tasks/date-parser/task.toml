@@ -1,0 +1,15 @@
+id = "date-parser"
+prompt = """
+`parse_date` in `dates.py` returns wrong results for some inputs. The tests in
+`test_dates.py` show one failing case; there are others.
+
+Make the parser correct for every format listed in its docstring. Do not
+change the tests.
+"""
+difficulty = "hard"
+tags = ["ordering", "parsing", "ambiguity", "trap"]
+
+[limits]
+max_turns = 35
+max_usd = 0.60
+wall_timeout_secs = 700

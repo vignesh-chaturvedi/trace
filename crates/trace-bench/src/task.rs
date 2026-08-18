@@ -17,10 +17,29 @@ pub struct Task {
     pub id: String,
     /// What the agent is told. The only thing it sees.
     pub prompt: String,
+    /// Rough expected difficulty, for slicing results.
+    ///
+    /// A claim to check against reality, not a fact. If everything labelled
+    /// `hard` passes every repeat, the labels are wrong and so is the set.
+    #[serde(default)]
+    pub difficulty: Difficulty,
+    /// Free-form labels: `multi-file`, `off-by-one`, `unicode`, and so on.
+    /// Useful for asking which *kind* of task a change actually helped.
+    #[serde(default)]
+    pub tags: Vec<String>,
     #[serde(default)]
     pub limits: TaskLimits,
     #[serde(skip)]
     pub dir: PathBuf,
+}
+
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, Default, PartialOrd, Ord)]
+#[serde(rename_all = "snake_case")]
+pub enum Difficulty {
+    Easy,
+    #[default]
+    Medium,
+    Hard,
 }
 
 /// The benchmark's limits, not the operator's.
@@ -42,6 +61,15 @@ pub struct TaskLimits {
 pub const TASK_FILE: &str = "task.toml";
 pub const WORKSPACE_DIR: &str = "workspace";
 pub const VERIFY_FILE: &str = "verify.sh";
+
+/// A reference fix, applied to the seed workspace.
+///
+/// Never shown to the agent. It exists so the task set can prove two things
+/// about itself that are otherwise taken on faith: the seed really does fail,
+/// and the task really is solvable. A benchmark quietly containing an
+/// impossible task reads as a model that cannot do the work, and you would
+/// have no way to tell the difference.
+pub const SOLUTION_FILE: &str = "solution.sh";
 
 impl Task {
     pub fn load(dir: &Path) -> Result<Task> {
@@ -124,6 +152,15 @@ impl Task {
 
     pub fn verify_script(&self) -> PathBuf {
         self.dir.join(VERIFY_FILE)
+    }
+
+    /// The reference fix, if this task ships one.
+    pub fn solution_script(&self) -> PathBuf {
+        self.dir.join(SOLUTION_FILE)
+    }
+
+    pub fn has_solution(&self) -> bool {
+        self.solution_script().exists()
     }
 
     /// Fold the task's limits into a config.

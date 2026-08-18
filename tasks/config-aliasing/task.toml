@@ -1,0 +1,14 @@
+id = "config-aliasing"
+prompt = """
+Loading two configs in the same process gives the wrong result: the second
+load is contaminated by the first. `test_config.py` reproduces it.
+
+Fix it. Do not change the tests.
+"""
+difficulty = "hard"
+tags = ["aliasing", "mutable-state", "multi-file", "non-obvious"]
+
+[limits]
+max_turns = 35
+max_usd = 0.60
+wall_timeout_secs = 700

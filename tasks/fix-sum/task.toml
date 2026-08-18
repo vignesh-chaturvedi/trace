@@ -3,6 +3,8 @@ prompt = """
 `sum.sh` should print the sum of the numbers in `numbers.txt`, but it prints
 the wrong value. Find the bug and fix it. Verify your fix before you stop.
 """
+difficulty = "easy"
+tags = ["off-by-one", "shell"]
 
 [limits]
 max_turns = 20

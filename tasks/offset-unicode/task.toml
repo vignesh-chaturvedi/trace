@@ -1,0 +1,14 @@
+id = "offset-unicode"
+prompt = """
+`highlight.py` wraps a search match in markers, using offsets from
+`tokenize.py`. It works on plain ASCII and corrupts the text otherwise.
+
+Fix it so highlighting is correct for any input. Do not change the tests.
+"""
+difficulty = "hard"
+tags = ["unicode", "offsets", "multi-file", "non-obvious"]
+
+[limits]
+max_turns = 40
+max_usd = 0.70
+wall_timeout_secs = 800

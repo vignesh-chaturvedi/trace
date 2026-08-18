@@ -1,0 +1,16 @@
+id = "rename-symbol"
+prompt = """
+Rename the function `fetch_user` to `get_user` across this codebase, updating
+every call site and import so the tests still pass.
+
+Only the function and its references should change. Strings, comments about
+other things, and unrelated identifiers that merely contain the same letters
+must be left alone. Do not change the tests.
+"""
+difficulty = "hard"
+tags = ["refactor", "multi-file", "trap"]
+
+[limits]
+max_turns = 40
+max_usd = 0.70
+wall_timeout_secs = 800

@@ -1,0 +1,15 @@
+id = "graph-cycles"
+prompt = """
+`deps.py` resolves a build order from a dependency graph. It reports a cycle
+on some graphs that have none, and misses cycles in others.
+
+Fix it. `test_deps.py` covers part of the behaviour; the docstring describes
+all of it. Do not change the tests.
+"""
+difficulty = "hard"
+tags = ["algorithms", "graphs", "edge-cases"]
+
+[limits]
+max_turns = 40
+max_usd = 0.70
+wall_timeout_secs = 800

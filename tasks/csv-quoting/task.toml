@@ -1,0 +1,14 @@
+id = "csv-quoting"
+prompt = """
+`report.py` summarises `sales.csv` and produces the wrong total. The data is
+valid CSV.
+
+Fix the program so the totals are right. Do not change the data file.
+"""
+difficulty = "medium"
+tags = ["parsing", "reinvented-wheel", "data"]
+
+[limits]
+max_turns = 30
+max_usd = 0.50
+wall_timeout_secs = 600

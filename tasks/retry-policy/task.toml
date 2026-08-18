@@ -1,0 +1,15 @@
+id = "retry-policy"
+prompt = """
+The `retry` decorator in `retry.py` is meant to retry only transient failures,
+at most `attempts` times. `test_retry.py` shows it retrying something it
+should not.
+
+Fix it to match the docstring. Do not change the tests.
+"""
+difficulty = "medium"
+tags = ["control-flow", "exceptions", "off-by-one"]
+
+[limits]
+max_turns = 30
+max_usd = 0.50
+wall_timeout_secs = 600

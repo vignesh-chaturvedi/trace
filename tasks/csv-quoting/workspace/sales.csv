@@ -1,0 +1,6 @@
+region,description,amount
+north,"widgets, large",100
+south,"bolts, 3in, zinc",250
+east,plain item,75
+west,"quoted ""special"" order",300
+north,"trailing, comma,",25

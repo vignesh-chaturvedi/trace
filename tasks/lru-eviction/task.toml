@@ -1,0 +1,13 @@
+id = "lru-eviction"
+prompt = """
+`cache.py` implements an LRU cache. `test_cache.py` has a failing test.
+
+Fix the cache so all tests pass. Do not change the tests.
+"""
+difficulty = "medium"
+tags = ["off-by-one", "data-structures", "trap"]
+
+[limits]
+max_turns = 30
+max_usd = 0.50
+wall_timeout_secs = 600
