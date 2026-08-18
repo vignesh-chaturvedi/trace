@@ -11,9 +11,63 @@ was solved, and produces **one file** for you to send back.
 
 You do not need to understand the project. Follow the steps.
 
+**On Windows, do Step 0 first.** On macOS or Linux, skip it.
+
+---
+
+## Step 0 — Windows only: set up WSL2
+
+This project needs a Linux-style shell. Running it directly in PowerShell or
+Command Prompt **will not work** — and it fails in an unhelpful way: the
+harness can start a command but cannot stop one that overruns its time limit,
+so a stuck task would hang the whole run instead of failing cleanly.
+
+WSL2 gives you real Linux inside Windows and takes about ten minutes. Every
+later step then works exactly as written.
+
+**1.** Open **PowerShell as Administrator** (right-click → Run as
+administrator) and run:
+
+```
+wsl --install
+```
+
+**2.** Reboot when it asks. After restarting, an Ubuntu window opens and sets
+itself up. Choose a username and password when prompted — this is a Linux
+account, separate from your Windows login.
+
+> **You should see:** a prompt like `yourname@DESKTOP-ABC:~$`.
+> If no window appeared, open **Ubuntu** from the Start menu.
+
+**3.** Install **Docker Desktop for Windows** from <https://docker.com>. After
+installing, open it and go to **Settings → Resources → WSL integration**, then
+turn on the switch for **Ubuntu** and click **Apply & Restart**.
+
+**4.** Check it from the Ubuntu window:
+
+```bash
+docker info
+```
+
+> **You should see:** a long block of text ending in server details.
+> If you see "Cannot connect to the Docker daemon", the WSL integration switch
+> in Step 0.3 is off, or Docker Desktop is not running.
+
+**From here on, use the Ubuntu window for everything.** Not PowerShell, not
+Command Prompt. Every command in this guide is typed there.
+
+> **Important:** in Step 2 you will download the project. Do it in your Linux
+> home folder — just run the commands as written, which puts it in `~/trace`.
+> **Do not** put it under `/mnt/c/...`, that is, anywhere on your Windows
+> drives. Docker cannot reliably reach files across that boundary and it is
+> very slow. Step 5 will catch this if you get it wrong.
+
 ---
 
 ## Step 1 — Install two things
+
+Windows users: you are in the Ubuntu window now, and Docker is already done.
+You only need Rust below.
 
 **Rust** (compiles the program):
 
@@ -32,8 +86,9 @@ cargo --version
 > `source "$HOME/.cargo/env"`.
 
 **Docker** (runs each task in an isolated container, so nothing touches your
-real files). Install Docker Desktop from <https://docker.com>, **open the
-app**, and wait for its whale icon to stop animating. Check:
+real files). *Windows users: already done in Step 0 — skip to Step 2.*
+Install Docker Desktop from <https://docker.com>, **open the app**, and wait
+for its whale icon to stop animating. Check:
 
 ```bash
 docker info
@@ -48,6 +103,7 @@ docker info
 ## Step 2 — Download the project
 
 ```bash
+cd ~
 git clone <REPO-URL-THEY-GAVE-YOU>
 cd trace
 ```
@@ -55,6 +111,10 @@ cd trace
 > **Important:** do not edit anything in the `tasks/` folder. The results are
 > only comparable if the tasks are exactly as shipped. The program records a
 > fingerprint of them and will notice.
+
+> **Windows:** the `cd ~` above matters. It puts the project in your Linux
+> home folder, where Docker can reach it. Running this from `/mnt/c/...` looks
+> like it works and then fails at Step 5.
 
 ---
 
@@ -181,6 +241,11 @@ again. Nothing is damaged; it starts a fresh run.
 The file `trace-results.md` is now in the project folder. Send it however you
 like — email, WhatsApp, anything. It is small (usually under 100 KB).
 
+> **Windows:** the file is inside WSL, so Windows Explorer will not show it in
+> the usual places. From the Ubuntu window, run `explorer.exe .` to open the
+> project folder in Explorer, then drag the file out. Or copy it across with
+> `cp trace-results.md /mnt/c/Users/<your-windows-name>/Desktop/`.
+
 **Please do not commit or push it.** It is their result to record, in their
 repository.
 
@@ -248,3 +313,32 @@ cargo run --release --bin trace -- bench run --repeats 3 --limit 3 --container -
 **Anything else**
 Send the error text along with whatever `trace-results.md` was produced. The
 error is often more informative than the results.
+
+### Windows-specific
+
+**`'make' is not recognized`, `bash: command not found`, `'cargo' is not
+recognized`**
+You are in PowerShell or Command Prompt. Open the **Ubuntu** window from the
+Start menu and run everything there. See Step 0.
+
+**`FAIL  workspace mount — not visible inside the container`, and the project
+is under `/mnt/c/...`**
+The project is on a Windows drive, which Docker cannot reliably reach from
+WSL. Move it into the Linux side and try again:
+
+```bash
+cd ~ && git clone <REPO-URL> && cd trace
+```
+
+**Everything is very slow, or the build takes many minutes**
+Same cause: the project is on `/mnt/c/...`. File access across that boundary
+is slow enough to matter. Move it to `~` as above.
+
+**`docker info` works in PowerShell but not in Ubuntu**
+Docker Desktop → Settings → Resources → **WSL integration** → enable your
+Ubuntu distro → Apply & Restart.
+
+**Windows without WSL**
+Not supported, and it fails in a way that wastes your time rather than telling
+you: the harness can start a command but cannot stop one that overruns, so a
+stuck task hangs the run instead of failing. Use WSL2 — Step 0.
