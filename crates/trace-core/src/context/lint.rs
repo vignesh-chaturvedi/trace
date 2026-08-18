@@ -51,9 +51,54 @@ pub fn lint(cfg: &Config, start: &SessionStart) -> Vec<Finding> {
     let region = stable_region(cfg, start);
     out.extend(scan(&region.system, "system prompt"));
     out.extend(scan(&region.tools_json, "tool schemas"));
+    out.extend(check_prefix_size(cfg, start));
 
     out.sort_by_key(|f| f.severity);
     out
+}
+
+/// Size of the stable prefix, measured in tokens.
+pub fn stable_prefix_tokens(cfg: &Config, start: &SessionStart) -> u64 {
+    let r = stable_region(cfg, start);
+    super::tokens::estimate_str(&r.system) + super::tokens::estimate_str(&r.tools_json)
+}
+
+/// The smallest prompt a provider will bother caching.
+///
+/// A byte-stable prefix earns nothing if it never reaches the provider's
+/// minimum. This is the gap between "the layout is correct" and "the cache
+/// actually hits", and it is invisible until you read someone's docs.
+pub const CACHE_THRESHOLDS: &[(&str, u64)] = &[
+    ("OpenAI", 1024),
+    ("Anthropic", 1024),
+    ("Gemini 2.5", 2048),
+    ("Gemini 3.x Flash", 4096),
+];
+
+fn check_prefix_size(cfg: &Config, start: &SessionStart) -> Vec<Finding> {
+    let tokens = stable_prefix_tokens(cfg, start);
+
+    let unmet: Vec<&str> = CACHE_THRESHOLDS
+        .iter()
+        .filter(|(_, min)| tokens < *min)
+        .map(|(name, _)| *name)
+        .collect();
+
+    if unmet.is_empty() {
+        return Vec::new();
+    }
+
+    vec![Finding {
+        severity: Severity::Warn,
+        rule: "prefix-below-cache-threshold",
+        detail: format!(
+            "the stable region is ~{tokens} tokens, below the minimum these providers will \
+             cache at all: {}. Caching will only begin once the conversation itself pushes \
+             the total over the threshold, so early turns pay full price no matter how \
+             stable the layout is.",
+            unmet.join(", ")
+        ),
+    }]
 }
 
 pub fn has_errors(findings: &[Finding]) -> bool {

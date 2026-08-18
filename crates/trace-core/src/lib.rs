@@ -26,6 +26,7 @@ pub mod log;
 pub mod message;
 pub mod provider;
 pub mod runtime;
+pub mod secrets;
 pub mod tools;
 
 pub use config::Config;

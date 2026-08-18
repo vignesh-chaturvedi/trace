@@ -12,6 +12,7 @@ path = "src/main.rs"
 
 [dependencies]
 trace-core = { path = "../trace-core" }
+trace-bench = { path = "../trace-bench" }
 serde_json.workspace = true
 anyhow.workspace = true
 clap.workspace = true

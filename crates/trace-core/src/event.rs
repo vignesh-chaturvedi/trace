@@ -226,6 +226,7 @@ pub struct Abort {
 pub enum AbortReason {
     TurnCap,
     Budget,
+    WallTimeout,
     ProviderError,
     PolicyDenial,
     Interrupted,

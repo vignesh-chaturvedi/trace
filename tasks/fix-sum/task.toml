@@ -1,0 +1,10 @@
+id = "fix-sum"
+prompt = """
+`sum.sh` should print the sum of the numbers in `numbers.txt`, but it prints
+the wrong value. Find the bug and fix it. Verify your fix before you stop.
+"""
+
+[limits]
+max_turns = 20
+max_usd = 0.25
+wall_timeout_secs = 300

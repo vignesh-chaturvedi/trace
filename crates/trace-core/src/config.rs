@@ -37,6 +37,21 @@ pub struct ModelConfig {
     pub price_in_per_mtok: f64,
     pub price_out_per_mtok: f64,
     pub price_cached_in_per_mtok: f64,
+    /// Send `stream_options: {include_usage: true}`.
+    ///
+    /// OpenAI needs this or a streaming response carries no usage at all and
+    /// the cache hit rate silently reads as zero forever. Some compatible
+    /// layers reject the unknown field outright, so it is a switch rather than
+    /// a constant. Turning it off costs you usage accounting, not correctness.
+    pub stream_usage: bool,
+    /// Client-side throttle. 0 disables it.
+    ///
+    /// A free tier with a 15 RPM cap will otherwise spend a sweep generating
+    /// 429s instead of results. Pacing on the client is cheaper than retrying
+    /// on the server.
+    pub requests_per_minute: u32,
+    /// Retries for 429 and 5xx, with exponential backoff.
+    pub max_retries: u32,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
@@ -106,6 +121,9 @@ impl Default for ModelConfig {
             price_in_per_mtok: 0.0,
             price_out_per_mtok: 0.0,
             price_cached_in_per_mtok: 0.0,
+            stream_usage: true,
+            requests_per_minute: 0,
+            max_retries: 5,
         }
     }
 }

@@ -1,0 +1,73 @@
+# Gemini via its OpenAI-compatible endpoint.
+#
+#   trace bench run --config gemini.toml --repeats 3 --limit 1
+#
+# Kept separate from trace.toml so the committed default stays honest about
+# what the project baselines on. Switch per run, not by editing the baseline.
+
+[model]
+# Confirmed present via the API's own models list. Note there is no
+# "gemini-3.6-flash-lite" -- 3.6 has no lite variant.
+#
+# 3.6-flash was tried first and its free-tier quota is 20 requests, measured
+# per model. One task run costs ~11 requests, so a sweep died on its second
+# repeat. Lite models carry the far larger allowance, and quota is tracked
+# per model, so switching here starts from a fresh budget.
+name = "gemini-3.5-flash-lite"
+# Verify against Google's current docs; this path has moved before.
+base_url = "https://generativelanguage.googleapis.com/v1beta/openai"
+api_key_env = "GEMINI_API_KEY"
+temperature = 0.0
+context_limit = 1000000
+
+# Free tier: no money changes hands, so these stay zero and every run reports
+# $0.00. That is accurate, but it also means `max_usd` cannot protect you --
+# spend never rises, so the budget guard never trips. On this config the turn
+# cap below is the only thing standing between you and your daily quota.
+price_in_per_mtok = 0.0
+price_out_per_mtok = 0.0
+price_cached_in_per_mtok = 0.0
+
+# Google's OpenAI-compatibility docs show stream_options={"include_usage":
+# true}, and the compat layer reports cached tokens under
+# prompt_tokens_details.cached_tokens -- the same shape OpenAI uses. Leave this
+# on; without it a streaming response carries no usage at all.
+stream_usage = true
+
+# Deliberately under the documented 15/min ceiling. The throttle paces from
+# the *start* of the previous request, so a slow response can still let two
+# land inside the same wall-clock minute; 12 leaves room for that rather than
+# discovering it as a 429.
+requests_per_minute = 12
+max_retries = 5
+
+[limits]
+# Deliberately tighter than trace.toml. Every turn is one call against a daily
+# quota, so a runaway session costs you the rest of the day rather than money.
+max_turns = 25
+max_usd = 1.00
+tool_timeout_ms = 120000
+
+[context]
+compact_at = 0.75
+keep_recent = 6
+truncate_limit = 8000
+reinforce = false
+
+[guards]
+loop_window = 8
+loop_threshold = 3
+
+[prompt]
+system = """
+You are a software engineer working in a terminal on a real repository.
+
+You have one tool: bash. Use it for everything - reading files, searching,
+editing, running tests, installing dependencies.
+
+- Verify before you claim. Run the tests.
+- Prefer small checkable steps over large speculative ones.
+- If a command fails, read the error before trying again.
+- When the task is complete and verified, say so and stop.
+
+Working directory: {cwd}"""

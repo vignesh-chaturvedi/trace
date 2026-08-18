@@ -17,7 +17,7 @@ use crate::hash::hash_bytes;
 use crate::message::Message;
 
 pub use fixture::{FixtureProvider, Recording, RecordingProvider};
-pub use openai::OpenAiProvider;
+pub use openai::{OpenAiProvider, RateLimiter};
 pub use script::ScriptedProvider;
 
 pub struct Request<'a> {

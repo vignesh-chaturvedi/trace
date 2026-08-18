@@ -8,7 +8,8 @@
 //! and offline ablation.
 
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use crate::config::Config;
 use crate::context::build_context;
@@ -21,7 +22,7 @@ use crate::event::{
 use crate::log::EventLog;
 use crate::message::{JsonValue, Message};
 use crate::provider::{Flow, Provider, Request};
-use crate::tools::bash::run_bash;
+use crate::tools::exec::{Executor, HostExec};
 use crate::tools::schedule::plan;
 use crate::tools::schema::BASH;
 
@@ -33,10 +34,16 @@ pub struct Session {
     pub cfg: Config,
     log: EventLog,
     events: Vec<Event>,
-    workspace: PathBuf,
+    executor: Arc<dyn Executor>,
     usage: Usage,
     spend: f64,
     turns: u64,
+    /// Hard wall-clock ceiling, checked between turns.
+    ///
+    /// A benchmark's timeout is part of its definition, so it has to be
+    /// enforceable from outside rather than approximated by turn and budget
+    /// caps.
+    deadline: Option<Instant>,
 }
 
 #[derive(Debug, Clone)]
@@ -58,12 +65,32 @@ pub struct StartArgs<'a> {
     pub harness_commit: String,
 }
 
+impl StartArgs<'_> {
+    /// The default executor: run on the host, in `workspace`.
+    fn host_executor(&self) -> Arc<dyn Executor> {
+        Arc::new(HostExec::new(self.workspace.clone()))
+    }
+}
+
 impl Session {
     pub fn start(cfg: Config, args: StartArgs<'_>) -> Result<Session> {
+        let executor = args.host_executor();
+        Session::start_with(cfg, args, executor)
+    }
+
+    /// Start a session whose tools run somewhere other than the host.
+    pub fn start_with(
+        cfg: Config,
+        args: StartArgs<'_>,
+        executor: Arc<dyn Executor>,
+    ) -> Result<Session> {
         let mut log = EventLog::create(args.log_path, args.session_id)?;
         let start = SessionStart {
             task: args.task,
-            cwd: args.workspace.display().to_string(),
+            // The executor's view, not the host's. In a container this is a
+            // fixed mount point, which is what lets every attempt in a sweep
+            // share one cacheable prefix.
+            cwd: executor.workdir().to_string(),
             model: cfg.model.name.clone(),
             config_hash: cfg.hash(),
             harness_commit: args.harness_commit,
@@ -75,10 +102,11 @@ impl Session {
             cfg,
             log,
             events: vec![first],
-            workspace: args.workspace,
+            executor,
             usage: Usage::default(),
             spend: 0.0,
             turns: 0,
+            deadline: None,
         })
     }
 
@@ -87,6 +115,14 @@ impl Session {
     /// Cost and turn counters are rebuilt from the log rather than carried
     /// across, so a resumed session cannot quietly restart its budget.
     pub fn resume(cfg: Config, log_path: &Path, workspace: PathBuf) -> Result<Session> {
+        Session::resume_with(cfg, log_path, Arc::new(HostExec::new(workspace)))
+    }
+
+    pub fn resume_with(
+        cfg: Config,
+        log_path: &Path,
+        executor: Arc<dyn Executor>,
+    ) -> Result<Session> {
         let (log, events) = EventLog::resume(log_path)?;
 
         let mut usage = Usage::default();
@@ -109,11 +145,18 @@ impl Session {
             cfg,
             log,
             events,
-            workspace,
+            executor,
             usage,
             spend,
             turns,
+            deadline: None,
         })
+    }
+
+    /// Stop the session if it is still running at `at`.
+    pub fn with_deadline(&mut self, at: Instant) -> &mut Self {
+        self.deadline = Some(at);
+        self
     }
 
     pub fn events(&self) -> &[Event] {
@@ -147,6 +190,15 @@ impl Session {
         self.recover()?;
 
         loop {
+            if let Some(deadline) = self.deadline {
+                if Instant::now() >= deadline {
+                    return self.abort(
+                        AbortReason::WallTimeout,
+                        "exceeded the task's wall-clock limit".to_string(),
+                    );
+                }
+            }
+
             self.maybe_compact(provider)?;
 
             let head = self.head();
@@ -260,7 +312,7 @@ impl Session {
             }
             self.log.sync()?;
 
-            let mut results = run_batch(&batch.0, calls, &self.workspace, timeout);
+            let mut results = run_batch(&batch.0, calls, self.executor.as_ref(), timeout);
 
             // Record in call order, never completion order. Otherwise a replay
             // of a parallel batch depends on which thread happened to finish
@@ -381,12 +433,12 @@ impl Session {
 fn run_batch(
     idxs: &[usize],
     calls: &[ToolCall],
-    cwd: &Path,
+    exec: &dyn Executor,
     timeout: Duration,
 ) -> Vec<(usize, ToolResult)> {
     if idxs.len() == 1 {
         let i = idxs[0];
-        return vec![(i, run_one(&calls[i], cwd, timeout))];
+        return vec![(i, run_one(&calls[i], exec, timeout))];
     }
 
     std::thread::scope(|scope| {
@@ -394,7 +446,7 @@ fn run_batch(
             .iter()
             .map(|&i| {
                 let call = &calls[i];
-                scope.spawn(move || (i, run_one(call, cwd, timeout)))
+                scope.spawn(move || (i, run_one(call, exec, timeout)))
             })
             .collect();
 
@@ -405,7 +457,7 @@ fn run_batch(
     })
 }
 
-fn run_one(call: &ToolCall, cwd: &Path, timeout: Duration) -> ToolResult {
+fn run_one(call: &ToolCall, exec: &dyn Executor, timeout: Duration) -> ToolResult {
     let blank = ToolResult {
         call_id: call.id.clone(),
         exit_code: -1,
@@ -431,7 +483,7 @@ fn run_one(call: &ToolCall, cwd: &Path, timeout: Duration) -> ToolResult {
         };
     };
 
-    match run_bash(cmd, cwd, timeout) {
+    match exec.run(cmd, timeout) {
         Ok(o) => ToolResult {
             call_id: call.id.clone(),
             exit_code: o.exit_code,
@@ -456,13 +508,20 @@ pub fn new_session_id(now_ms: u64, salt: u32) -> String {
 impl Session {
     /// Convenience for callers that just want a checkpoint taken now.
     pub fn checkpoint(&mut self, label: &str) -> Result<()> {
-        if !super::checkpoint::is_git_repo(&self.workspace) {
+        // Checkpointing touches real files, so it needs a host-side path. An
+        // executor without one simply does not support it, and says so rather
+        // than writing a checkpoint that restores nothing.
+        let workspace = self.executor.host_path().ok_or_else(|| {
+            Error::other("this executor has no host-side workspace; checkpoints need one")
+        })?;
+
+        if !super::checkpoint::is_git_repo(workspace) {
             return Err(Error::other(
                 "workspace is not a git repository; checkpoints need one",
             ));
         }
         let seq = self.head();
-        let ckpt = super::checkpoint::create(&self.workspace, self.log.session(), label, seq)?;
+        let ckpt = super::checkpoint::create(workspace, self.log.session(), label, seq)?;
         self.append(Body::Checkpoint(ckpt))?;
         Ok(())
     }

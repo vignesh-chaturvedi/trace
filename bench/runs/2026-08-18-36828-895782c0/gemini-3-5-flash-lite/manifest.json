@@ -1,0 +1,13 @@
+{
+  "sweep_id": "2026-08-18-36828-895782c0",
+  "started_ms": 1787048028343,
+  "harness_commit": "ecffe8b",
+  "config_hash": "895782c056e8cc393ba4af3c65c45a2dd9c800757dea7d58de61e48728190c11",
+  "model": "gemini-3.5-flash-lite",
+  "repeats": 3,
+  "task_ids": [
+    "add-reverse",
+    "fix-parse",
+    "fix-sum"
+  ]
+}

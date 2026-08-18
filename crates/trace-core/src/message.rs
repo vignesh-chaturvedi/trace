@@ -37,11 +37,24 @@ pub struct Message {
 /// preference: hash-map key order is the single most common cause of a
 /// zero-percent cache hit rate, because the bytes change every turn while the
 /// content does not. `BTreeMap` makes the ordering structural.
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Eq, Default)]
 pub struct ToolCallRef {
     pub id: String,
     pub name: String,
     pub args: BTreeMap<String, JsonValue>,
+    /// Provider metadata attached to this call, echoed back verbatim.
+    ///
+    /// Gemini 3.x returns an encrypted `thought_signature` here and **rejects
+    /// the next turn with a 400 if it is not sent back** — the model's
+    /// reasoning state is stateless across turns, and the signature is how it
+    /// is carried. Dropping it produces a harness that can make exactly one
+    /// tool call per session.
+    ///
+    /// Kept opaque and untyped on purpose. This is a passthrough channel, not
+    /// a place to grow per-vendor branches: whatever arrived goes back out
+    /// unchanged, and a provider that sends nothing costs nothing.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extra: Option<JsonValue>,
 }
 
 /// A deterministically-ordered JSON value.

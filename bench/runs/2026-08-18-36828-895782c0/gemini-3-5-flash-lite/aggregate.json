@@ -1,0 +1,19 @@
+{
+  "model": "gemini-3.5-flash-lite",
+  "tasks": 3,
+  "repeats": 3,
+  "runs": 9,
+  "pass_rate": 1.0,
+  "pass_rate_sigma": 0.0,
+  "total_usd": 0.0,
+  "usd_per_run": 0.0,
+  "mean_turns": 10.444444444444445,
+  "tokens": {
+    "input": 63173,
+    "output": 3329,
+    "cached_input": 0
+  },
+  "cache_hit_rate": 0.0,
+  "harness_errors": 0,
+  "flaky_task_ids": []
+}

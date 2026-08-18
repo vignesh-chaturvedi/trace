@@ -1,0 +1,10 @@
+id = "add-reverse"
+prompt = """
+`test_words.py` fails because `reverse_words` is not implemented in
+`words.py`. Implement it so the tests pass. Run the tests to confirm.
+"""
+
+[limits]
+max_turns = 20
+max_usd = 0.25
+wall_timeout_secs = 300

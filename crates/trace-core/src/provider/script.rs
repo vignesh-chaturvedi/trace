@@ -61,6 +61,7 @@ impl ScriptedProvider {
                     args: [("cmd".to_string(), JsonValue::Str(cmd.to_string()))]
                         .into_iter()
                         .collect(),
+                    extra: None,
                 }],
                 tool_call_id: None,
             },

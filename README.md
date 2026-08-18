@@ -131,3 +131,7 @@ tool, truncation — is here, but the measurement rig around it is not.
 Phase 2 adds editing tools. The scheduler already classifies `read`/`grep`/`ls` and
 `edit`/`write` for concurrency, so they slot in without rework; Phase 1 deliberately
 ships bash-only so each tool added later carries a measured delta.
+
+## License
+
+Apache License 2.0 — see [LICENSE](LICENSE). Copyright 2026 Vignesh Chaturvedi.

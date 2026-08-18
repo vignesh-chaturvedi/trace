@@ -1,0 +1,10 @@
+id = "fix-parse"
+prompt = """
+`parse.py` crashes on some lines of `data.csv`. It should skip malformed rows
+and print the total of the valid ones. Fix it and check it runs cleanly.
+"""
+
+[limits]
+max_turns = 20
+max_usd = 0.25
+wall_timeout_secs = 300

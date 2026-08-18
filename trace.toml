@@ -19,6 +19,9 @@ context_limit = 128000
 price_in_per_mtok = 0.40
 price_out_per_mtok = 1.60
 price_cached_in_per_mtok = 0.10
+# OpenAI needs this or streaming returns no usage and cache hit rate reads as
+# zero. Some compatible layers reject the field; set false there.
+stream_usage = true
 
 [limits]
 max_turns = 60

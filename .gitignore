@@ -3,3 +3,14 @@
 /.trace
 *.profraw
 reports/trace-phase-manual.html
+
+# Benchmark results ARE committed -- the git history of your scores is part of
+# the artifact. But not the per-attempt scratch workspaces: each one carries
+# its own `git init`, which is ~400 files of nothing. The trajectory records
+# what happened, and the workspace is reproducible from the task seed.
+bench/runs/**/workspace/
+
+# Secrets. Never commit.
+.env
+.env.*
+!.env.example
