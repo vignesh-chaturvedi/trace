@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TRACE — Phase 1 Report</title>
+<style>
+:root{
+  --bg:#fcfcfa; --surface:#f7f6f2; --surface-2:#f1efe9;
+  --ink:#1b1a18; --muted:#6d6a63; --faint:#97948c;
+  --rule:#e7e4dd; --rule-soft:#f0eee8;
+  --accent:#9a5c14; --accent-soft:#f6efe4;
+  --ok:#2f6b4f; --warn:#8a6210; --blocked:#a3452f;
+  --col:50rem;
+  --sans:ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Helvetica,Arial,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:var(--sans); font-size:16px; line-height:1.68;
+  -webkit-font-smoothing:antialiased; text-rendering:optimizeLegibility;
+}
+.wrap{max-width:var(--col); margin:0 auto; padding:0 1.75rem 8rem}
+
+/* masthead */
+.mast{padding:5rem 0 2.5rem; border-bottom:1px solid var(--rule)}
+.brand{font-family:var(--mono); font-size:.75rem; letter-spacing:.2em; color:var(--accent); font-weight:600}
+.mast h1{margin:1rem 0 .4rem; font-size:2.5rem; line-height:1.12; font-weight:600; letter-spacing:-.022em}
+.mast .sub{color:var(--muted); font-size:1.0625rem; max-width:38rem; margin:0}
+.mast .meta{margin-top:1.75rem; display:flex; flex-wrap:wrap; gap:.5rem .75rem; align-items:center}
+
+.pill{
+  display:inline-flex; align-items:center; gap:.4rem; font-size:.75rem; font-weight:500;
+  font-family:var(--mono); letter-spacing:.02em;
+  padding:.25rem .6rem; border-radius:999px; border:1px solid var(--rule); color:var(--muted);
+  background:var(--surface);
+}
+.pill.ok{color:var(--ok); border-color:#cfe0d5; background:#f2f8f4}
+.pill.warn{color:var(--warn); border-color:#e8dcc0; background:#fbf6ea}
+.pill.blocked{color:var(--blocked); border-color:#eccfc7; background:#fcf2ef}
+
+/* facts */
+.facts{
+  margin:2.5rem 0 0; display:grid; gap:1px; background:var(--rule);
+  grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));
+  border:1px solid var(--rule); border-radius:6px; overflow:hidden;
+}
+.fact{background:var(--bg); padding:.9rem 1rem}
+.fact dt{font-size:.7rem; letter-spacing:.09em; text-transform:uppercase; color:var(--faint); margin:0 0 .2rem}
+.fact dd{margin:0; font-family:var(--mono); font-size:.9375rem; font-weight:500}
+
+/* sections */
+section{padding-top:3.5rem}
+h2{
+  margin:0 0 1.25rem; font-size:1.375rem; font-weight:600; letter-spacing:-.014em;
+  display:flex; align-items:baseline; gap:.7rem;
+}
+h2 .n{font-family:var(--mono); font-size:.8125rem; color:var(--accent); font-weight:600}
+h3{margin:2.25rem 0 .6rem; font-size:1.0625rem; font-weight:600; letter-spacing:-.008em}
+p{margin:0 0 1rem}
+p.lede{color:var(--muted)}
+a{color:var(--accent); text-underline-offset:2px}
+
+ul{margin:0 0 1rem; padding-left:1.1rem}
+li{margin-bottom:.4rem}
+li::marker{color:var(--faint)}
+
+code{
+  font-family:var(--mono); font-size:.855em; background:var(--surface-2);
+  padding:.1em .35em; border-radius:3px; color:#4a3a22;
+}
+pre{
+  background:var(--surface); border:1px solid var(--rule); border-radius:6px;
+  padding:1rem 1.1rem; overflow-x:auto; margin:0 0 1.25rem;
+  font-family:var(--mono); font-size:.8125rem; line-height:1.6;
+}
+pre code{background:none; padding:0; color:var(--ink); font-size:inherit}
+.dim{color:var(--faint)}
+
+/* decision blocks */
+.dec{border-left:2px solid var(--accent); padding:.15rem 0 .15rem 1.15rem; margin:0 0 1.75rem}
+.dec h4{margin:0 0 .4rem; font-size:1rem; font-weight:600}
+.dec p{margin:0 0 .55rem}
+.dec p:last-child{margin-bottom:0}
+.dec .alt{font-size:.9375rem; color:var(--muted)}
+.dec .alt b{color:var(--ink); font-weight:600}
+
+.note{
+  background:var(--accent-soft); border:1px solid #ecdcc4; border-radius:6px;
+  padding:.9rem 1.1rem; margin:0 0 1.5rem; font-size:.9375rem;
+}
+.note b{display:block; font-family:var(--mono); font-size:.7rem; letter-spacing:.1em;
+  text-transform:uppercase; color:var(--accent); margin-bottom:.3rem}
+
+/* tables */
+.scroll{overflow-x:auto; margin:0 0 1.5rem}
+table{width:100%; border-collapse:collapse; font-size:.9375rem; min-width:32rem}
+th,td{text-align:left; padding:.6rem .75rem; border-bottom:1px solid var(--rule-soft); vertical-align:top}
+th{
+  font-size:.7rem; letter-spacing:.09em; text-transform:uppercase; color:var(--faint);
+  font-weight:500; border-bottom:1px solid var(--rule); white-space:nowrap;
+}
+tbody tr:last-child td{border-bottom:none}
+td.mono,th.mono{font-family:var(--mono); font-size:.8125rem; white-space:nowrap}
+td .why{display:block; color:var(--muted); font-size:.875rem; margin-top:.15rem}
+
+/* diagram */
+figure{margin:0 0 1.5rem}
+figure svg{width:100%; height:auto; display:block}
+figcaption{margin-top:.6rem; font-size:.875rem; color:var(--muted)}
+
+footer{
+  margin-top:5rem; padding-top:1.5rem; border-top:1px solid var(--rule);
+  color:var(--faint); font-size:.875rem;
+}
+
+@media (max-width:34rem){
+  body{font-size:15px}
+  .mast{padding-top:3rem}
+  .mast h1{font-size:1.9rem}
+  .wrap{padding:0 1.15rem 4rem}
+}
+@media print{
+  body{background:#fff}
+  .mast{padding-top:0}
+  section{page-break-inside:avoid}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="mast">
+  <div class="brand">TRACE · PHASE REPORT</div>
+  <h1>Phase 1 — Runtime</h1>
+  <p class="sub">
+    Score should stay flat. What changes is that everything becomes measurable,
+    recoverable, and — critically — trainable.
+  </p>
+  <div class="meta">
+    <span class="pill ok">✓ 82 tests passing</span>
+    <span class="pill ok">✓ clippy clean (-D warnings)</span>
+    <span class="pill warn">2 exit criteria partial</span>
+    <span class="pill">18 Aug 2026</span>
+  </div>
+
+  <dl class="facts">
+    <div class="fact"><dt>Language</dt><dd>Rust 1.89</dd></div>
+    <div class="fact"><dt>Source</dt><dd>4,063 lines</dd></div>
+    <div class="fact"><dt>Tests</dt><dd>2,278 lines</dd></div>
+    <div class="fact"><dt>Binary</dt><dd>3.4 MB</dd></div>
+    <div class="fact"><dt>Runtime deps</dt><dd>9 crates</dd></div>
+    <div class="fact"><dt>Network in tests</dt><dd>none</dd></div>
+  </dl>
+</header>
+
+<section>
+  <h2><span class="n">01</span> What this phase changed</h2>
+  <p class="lede">
+    Phase 0's agent holds a conversation in memory and loops over it. Phase 1 inverts
+    that: <b>the log is the conversation</b>, and every turn rebuilds its context from
+    the log. Structurally the loop is still the same twenty lines. Everything that
+    matters follows from where state lives.
+  </p>
+  <p>
+    That single inversion is what buys byte-identical replay, clean resume from a
+    crash, and offline ablation. None of the three is bolted on afterwards; each falls
+    out of the fact that nothing is held anywhere else.
+  </p>
+
+  <h3>The four invariants</h3>
+  <ul>
+    <li><b>The log is the session.</b> Append-only JSONL, monotonic gapless <code>seq</code>, <code>fsync</code> on boundary events. Flat text so it stays greppable, diffable, tailable, and streamable into a training pipeline.</li>
+    <li><b>Context is a pure function of the log.</b> <code>build_context(events, cfg, upto)</code> reads no clock, no environment, no filesystem.</li>
+    <li><b>The prefix never moves.</b> System prompt, tool schemas, and <code>AGENTS.md</code> form a byte-stable region, protected by a build-failing lint.</li>
+    <li><b>Losing work is a bug, not an accident.</b> A tool call is durable before it runs; an interrupted one is <em>unknown</em>, never blindly repeated.</li>
+  </ul>
+</section>
+
+<section>
+  <h2><span class="n">02</span> Language: Rust</h2>
+  <p>
+    Chosen after weighing it against TypeScript, which the source manual's Phase 5
+    section is written in (<code>AsyncIterable&lt;Event&gt;</code>, <code>createSession</code>).
+    Worth being precise about the reasoning, because the obvious argument is the wrong one.
+  </p>
+
+  <div class="note">
+    <b>Speed was not the reason</b>
+    The harness is I/O-bound. Wall time goes to model round trips (2–20 s) and
+    subprocesses (tests, builds). Language choice does not move task latency, and any
+    claim that it does should be treated with suspicion.
+  </div>
+
+  <p>The three reasons that did hold up:</p>
+  <ul>
+    <li><b>Phase 3 needs Landlock and seccomp.</b> Native crates in Rust; a native-addon fight in Node.</li>
+    <li><b>Determinism becomes structural.</b> The manual's named "silent killer" — tool schemas serialized from a hash map, same content, different bytes, zero cache hits — is a bug this codebase cannot express. See §4.</li>
+    <li><b>One static binary.</b> 3.4 MB, no runtime to install.</li>
+  </ul>
+
+  <h3>Dependency posture</h3>
+  <p>
+    Nine runtime crates: <code>serde</code>, <code>serde_json</code>, <code>toml</code>,
+    <code>blake3</code>, <code>libc</code>, <code>thiserror</code>, <code>ureq</code>,
+    <code>clap</code>, <code>anyhow</code>. Notably <b>no <code>tokio</code> and no
+    <code>reqwest</code></b>: the loop is inherently sequential, parallel tools use
+    scoped threads, and blocking I/O keeps <code>async</code> from colouring the
+    purity boundaries that §4 depends on.
+  </p>
+</section>
+
+<section>
+  <h2><span class="n">03</span> What landed, week by week</h2>
+  <div class="scroll">
+  <table>
+    <thead><tr><th class="mono">Week</th><th>Planned</th><th>Status</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">W1</td><td>Event log: schema, writer, reader, crash-safe append</td><td><span class="pill ok">done</span></td></tr>
+      <tr><td class="mono">W2</td><td>Context builder as a pure function + determinism tests</td><td><span class="pill ok">done</span></td></tr>
+      <tr><td class="mono">W3</td><td>Prefix-stable layout, layout lint, cache-hit accounting</td><td><span class="pill ok">done</span></td></tr>
+      <tr><td class="mono">W4</td><td>Compaction with provenance + pre-compaction flush</td><td><span class="pill ok">done</span></td></tr>
+      <tr><td class="mono">W5</td><td>Checkpoints, rewind, crash recovery, idempotency</td><td><span class="pill ok">done</span></td></tr>
+      <tr><td class="mono">W6</td><td>Guards, doom-loop detection, parallel tools, parity sweep</td><td><span class="pill warn">parity sweep blocked</span></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p class="lede">
+    The parity sweep is the one gap, and it is not a code gap: Phase 0's benchmark rig
+    was never built, so there is no baseline score to be flat against. Everything else
+    in W6 — doom-loop detection, budget and turn caps, the parallel scheduler — is in
+    and tested.
+  </p>
+
+  <h3>Also built: the Phase 0 substrate</h3>
+  <p>
+    Phase 1 wraps a Phase 0 agent that did not exist. The parts it wraps were therefore
+    built here: an OpenAI-compatible streaming client with usage accounting, the bash
+    tool, and middle-out truncation. The <em>measurement rig</em> around them — Harbor
+    adapter, sweeps, repeats, <code>bench/runs/</code> — was not. See §8.
+  </p>
+</section>
+
+<section>
+  <h2><span class="n">04</span> Design decisions, and why</h2>
+
+  <div class="dec">
+    <h4>Tool output is stored whole and truncated late</h4>
+    <p>
+      The log keeps the complete output of every command. The
+      <code>truncate_limit</code> is applied when the context is built, not when the
+      result is written.
+    </p>
+    <p class="alt">
+      <b>Why:</b> it makes the truncation limit a replay-time ablation. Change the
+      limit, replay the same log, and you get a genuinely different context to measure
+      — no re-run, no new API spend. It also means the log never discards something a
+      later analysis wants. The manual warns that sessions balloon on disk; the answer
+      is to compress at rest, never to truncate what you store.
+    </p>
+  </div>
+
+  <div class="dec">
+    <h4>Deterministic serialization is enforced by the type system</h4>
+    <p>
+      Tool schemas and tool-call arguments are built from a <code>JsonValue</code> type
+      whose only map variant is a <code>BTreeMap</code>.
+    </p>
+    <p class="alt">
+      <b>Why:</b> the failure this prevents is invisible. Schemas serialized from a
+      hash map produce identical content and different bytes every turn, so the
+      provider cache never hits and nothing in the code looks wrong. A test can catch
+      it; a type that cannot express the mistake means it never has to. There is
+      <em>also</em> a test — 100 randomized key insertion orders — because the
+      guarantee is worth pinning.
+    </p>
+  </div>
+
+  <div class="dec">
+    <h4>The reinforcement frame is derived, never logged</h4>
+    <p>
+      The objective-and-status frame is computed by <code>build_context</code> from the
+      events themselves — turn count is a count of responses in the log, not a counter
+      held in the runtime.
+    </p>
+    <p class="alt">
+      <b>Why:</b> it makes the ablation clean. If the frame were appended as an event,
+      a session run with <code>reinforce = on</code> could never be replayed as though
+      it were off — the frame would already be sitting in the trajectory being
+      measured. Deriving it means one log answers both questions.
+    </p>
+  </div>
+
+  <div class="dec">
+    <h4>Compaction declares a replacement; it never deletes</h4>
+    <p>
+      A <code>compaction</code> event records a range, a summary, and a provenance hash
+      of the events it stands in for. The events stay.
+    </p>
+    <p class="alt">
+      <b>Why:</b> compaction is lossy by definition, so the loss must be recoverable.
+      Replay expands back to full fidelity, which makes compaction strategies an
+      offline comparison rather than an expensive experiment — and lets Phase 4 train
+      on the uncompacted trajectory even though inference ran compacted. The
+      provenance hash means "replay restored the original" is a claim the log can
+      settle rather than an assumption.
+    </p>
+  </div>
+
+  <div class="dec">
+    <h4>An interrupted tool call is UNKNOWN, and is never re-run</h4>
+    <p>
+      <code>tool_call</code> is written and fsynced <em>before</em> execution;
+      <code>tool_result</code> is written after. On resume, a call with no matching
+      result emits a <code>recovery</code> event instead of being repeated.
+    </p>
+    <p class="alt">
+      <b>Why:</b> <code>rm -rf build/</code> twice is fine and <code>git push</code>
+      twice is not, and the harness has no way to tell them apart. So it does not
+      decide. It records what it knows and hands the model the job of re-establishing
+      ground truth — the one actor in the loop that can actually go and look.
+    </p>
+  </div>
+
+  <div class="dec">
+    <h4>Checkpoints never touch HEAD, branches, or the index</h4>
+    <p>
+      Committing uses a scratch <code>GIT_INDEX_FILE</code> plus
+      <code>write-tree</code> and <code>commit-tree</code>, storing the result under
+      <code>refs/trace/&lt;session&gt;/&lt;seq&gt;</code>.
+    </p>
+    <p class="alt">
+      <b>Why:</b> a harness that quietly rewrites your index is worse than one that
+      does not checkpoint at all. Rewind restores tracked files but deliberately does
+      <em>not</em> delete ignored ones — that would take <code>node_modules</code> and
+      build caches with it — and reports the drift instead.
+    </p>
+  </div>
+
+  <div class="dec">
+    <h4>Parallel results are recorded in call order, not completion order</h4>
+    <p>
+      A batch of concurrent tool calls is sorted back into the model's original order
+      before anything is appended to the log.
+    </p>
+    <p class="alt">
+      <b>Why:</b> otherwise replaying a parallel batch depends on which thread happened
+      to finish first, and determinism — the entire point of the phase — is gone.
+    </p>
+  </div>
+
+  <div class="dec">
+    <h4>Mid-file log damage is an error, not a repair</h4>
+    <p>
+      A torn final line is truncated and recovered. A line that fails to parse anywhere
+      else fails loudly.
+    </p>
+    <p class="alt">
+      <b>Why:</b> truncating at mid-file damage would silently discard every valid
+      event after it. A gap in <code>seq</code> is likewise fatal rather than
+      tolerated: replay, recovery, and compaction provenance all assume gapless
+      numbering, so a plausible-looking wrong answer is the worst possible outcome.
+    </p>
+  </div>
+
+  <h3>The cacheable prefix</h3>
+  <figure>
+    <svg viewBox="0 0 720 190" xmlns="http://www.w3.org/2000/svg" role="img"
+         aria-label="Diagram: a byte-stable region at the front of the context, followed by a growing conversation tail.">
+      <defs>
+        <style>
+          .lbl{font:500 12px ui-monospace,monospace;fill:#6d6a63}
+          .lbl-a{font:600 12px ui-monospace,monospace;fill:#9a5c14}
+          .cap{font:400 11px ui-sans-serif,system-ui,sans-serif;fill:#97948c}
+          .box{fill:#f6efe4;stroke:#e0cdb0}
+          .box2{fill:#f7f6f2;stroke:#e7e4dd}
+          .new{fill:#f2f8f4;stroke:#cfe0d5}
+        </style>
+      </defs>
+
+      <text x="0" y="12" class="lbl-a">stable region — byte-identical every turn</text>
+      <text x="470" y="12" class="lbl">volatile tail</text>
+
+      <!-- turn 1 -->
+      <text x="0" y="46" class="cap">turn 1</text>
+      <rect x="52" y="32" width="120" height="22" rx="3" class="box"/>
+      <text x="62" y="47" class="lbl">system</text>
+      <rect x="176" y="32" width="130" height="22" rx="3" class="box"/>
+      <text x="186" y="47" class="lbl">tool schemas</text>
+      <rect x="310" y="32" width="105" height="22" rx="3" class="box"/>
+      <text x="320" y="47" class="lbl">AGENTS.md</text>
+      <rect x="419" y="32" width="70" height="22" rx="3" class="new"/>
+      <text x="429" y="47" class="lbl">task</text>
+
+      <!-- turn 2 -->
+      <text x="0" y="86" class="cap">turn 2</text>
+      <rect x="52" y="72" width="120" height="22" rx="3" class="box"/>
+      <text x="62" y="87" class="lbl">system</text>
+      <rect x="176" y="72" width="130" height="22" rx="3" class="box"/>
+      <text x="186" y="87" class="lbl">tool schemas</text>
+      <rect x="310" y="72" width="105" height="22" rx="3" class="box"/>
+      <text x="320" y="87" class="lbl">AGENTS.md</text>
+      <rect x="419" y="72" width="70" height="22" rx="3" class="box2"/>
+      <text x="429" y="87" class="lbl">task</text>
+      <rect x="493" y="72" width="115" height="22" rx="3" class="new"/>
+      <text x="503" y="87" class="lbl">turn 1 result</text>
+
+      <!-- turn N -->
+      <text x="0" y="126" class="cap">turn N</text>
+      <rect x="52" y="112" width="120" height="22" rx="3" class="box"/>
+      <text x="62" y="127" class="lbl">system</text>
+      <rect x="176" y="112" width="130" height="22" rx="3" class="box"/>
+      <text x="186" y="127" class="lbl">tool schemas</text>
+      <rect x="310" y="112" width="105" height="22" rx="3" class="box"/>
+      <text x="320" y="127" class="lbl">AGENTS.md</text>
+      <rect x="419" y="112" width="189" height="22" rx="3" class="box2"/>
+      <text x="429" y="127" class="lbl">… conversation …</text>
+      <rect x="612" y="112" width="96" height="22" rx="3" class="new"/>
+      <text x="622" y="127" class="lbl">status frame</text>
+
+      <!-- brace -->
+      <path d="M52 148 L52 154 L415 154 L415 148" fill="none" stroke="#e0cdb0" stroke-width="1"/>
+      <text x="52" y="172" class="cap">unchanged across every turn — this is what the provider cache hits</text>
+    </svg>
+    <figcaption>
+      Anything turn-varying — counters, clocks, budget remaining — belongs in the tail,
+      where it costs nothing. The status frame sits last for exactly this reason.
+    </figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2><span class="n">05</span> Bugs the tests caught</h2>
+  <p class="lede">Both were real, and neither was visible by reading the code.</p>
+
+  <div class="dec">
+    <h4>The log repair path corrupted the first event</h4>
+    <p>
+      When a crash cost only the trailing newline, the repair wrote it back through a
+      handle opened with <code>write(true)</code> — which starts at offset <b>0</b>.
+      The terminator overwrote the first byte of event 1, turning a one-byte loss into
+      a corrupt ledger.
+    </p>
+    <p class="alt">
+      Found by the exhaustive kill sweep, not by the targeted torn-write test. Fixed by
+      using append mode. The lesson generalizes: the sweep found it because it tried
+      <em>every</em> offset rather than a plausible one.
+    </p>
+  </div>
+
+  <div class="dec">
+    <h4>The doom-loop nudge hardcoded "3 times"</h4>
+    <p>
+      The message told the model it had repeated a command three times regardless of
+      the configured <code>loop_threshold</code> — so a reconfigured harness would
+      assert a number the model's own transcript contradicted.
+    </p>
+    <p class="alt">
+      Fixed by substituting the observed count. Trivial to fix, easy to ship, and
+      exactly the kind of thing that quietly erodes a model's trust in its own context.
+    </p>
+  </div>
+
+  <h3>Two test bugs, worth recording</h3>
+  <ul>
+    <li>A provenance-tampering test mutated <code>events[3]</code> assuming it was a tool result; it was a <code>tool_call</code>, so the <code>if let</code> silently did nothing and the test asserted against unmodified data. Now it searches for a victim and fails if it finds none.</li>
+    <li>An "append-only growth" test failed correctly: between a <code>tool_call</code> and its result, the builder seals the gap with an <em>unknown</em> placeholder, so that context is not an extension of the previous one. Such a context is never sent — requests are only built at turn boundaries. The test now asserts the property where it actually applies.</li>
+  </ul>
+</section>
+
+<section>
+  <h2><span class="n">06</span> Test coverage</h2>
+  <p class="lede">
+    82 tests. No network, no API key: the fixture provider is a first-class backend
+    rather than a mock, keyed by the same context hash the log records.
+  </p>
+  <div class="scroll">
+  <table>
+    <thead><tr><th class="mono">File</th><th class="mono">n</th><th>What it pins down</th></tr></thead>
+    <tbody>
+      <tr><td class="mono">determinism.rs</td><td class="mono">5</td><td>Every recorded <code>context_hash</code> rebuilds exactly<span class="why">Including: rewrite every timestamp in a real session, assert the context does not move</span></td></tr>
+      <tr><td class="mono">layout.rs</td><td class="mono">10</td><td>Lint catches planted timestamps and counters; schemas byte-stable over 100 randomized key orders; prefix holds across 50 turns</td></tr>
+      <tr><td class="mono">guards.rs</td><td class="mono">10</td><td>Doom loop fires on identical repeats, not on flaky-but-varying output; budget aborts mid-stream with a recorded event</td></tr>
+      <tr><td class="mono">schedule.rs</td><td class="mono">9</td><td>Reads parallel, distinct-path writes parallel, same-path sequential, bash alone; ordering never changes</td></tr>
+      <tr><td class="mono">truncate.rs</td><td class="mono">8</td><td>Exactly-at-limit, one byte over, and multibyte boundaries across every limit from 1 to 400</td></tr>
+      <tr><td class="mono">compaction.rs</td><td class="mono">7</td><td>Round-trip expansion to the original event set; provenance detects tampering; chained compactions keep only the newest summary</td></tr>
+      <tr><td class="mono">event_log.rs</td><td class="mono">7</td><td>Gapless <code>seq</code>, one event per line even with embedded newlines, resume continues numbering</td></tr>
+      <tr><td class="mono">bash_tool.rs</td><td class="mono">7</td><td>stdin closed, stderr interleaved, process group killed on timeout, 300 KB output without deadlock</td></tr>
+      <tr><td class="mono">recovery.rs</td><td class="mono">6</td><td>Resume from <b>every byte offset</b> of a real log; interrupted calls never re-executed</td></tr>
+      <tr><td class="mono">checkpoint.rs</td><td class="mono">6</td><td>HEAD, index, and branches untouched; rewind reports untracked drift without deleting</td></tr>
+      <tr><td class="mono">e2e.rs</td><td class="mono">4</td><td>The real binary: run → replay → inspect → index, and meaningful exit codes</td></tr>
+      <tr><td class="mono">fixture_replay.rs</td><td class="mono">3</td><td>A recorded session replays offline; a drifted context misses rather than guessing</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note">
+    <b>Stronger than the plan asked for</b>
+    The test plan calls for "kill -9 the harness at 20 random points". Instead the suite
+    truncates a real log at <b>every byte offset</b> — the complete space of states a
+    crash can leave behind, enumerated deterministically with no timing race. It runs in
+    ~22 s and it is what found the repair bug in §5.
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">07</span> Exit criteria</h2>
+  <div class="scroll">
+  <table>
+    <thead><tr><th>Criterion</th><th>Status</th><th>Evidence</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Byte-identical replay</td>
+        <td><span class="pill ok">met</span></td>
+        <td><code>trace replay</code>; enforced in CI by <code>determinism.rs</code></td>
+      </tr>
+      <tr>
+        <td>Clean resume from any kill point</td>
+        <td><span class="pill ok">met</span></td>
+        <td>Exhaustive byte-offset sweep over a real session</td>
+      </tr>
+      <tr>
+        <td>Cache hit &gt; 90% on a 50-turn session</td>
+        <td><span class="pill warn">partial</span></td>
+        <td>The harness half is proven: across 50 consecutive turns every context shares the entire stable region as a literal byte prefix. The rate itself needs a live provider — accounting is wired through <code>usage.cached_input</code> and reported by <code>trace inspect</code>.</td>
+      </tr>
+      <tr>
+        <td>Score within noise of Phase 0</td>
+        <td><span class="pill blocked">blocked</span></td>
+        <td>Phase 0's benchmark rig does not exist, so there is no baseline to compare against.</td>
+      </tr>
+      <tr>
+        <td>Writeup on prefix-stable design published</td>
+        <td><span class="pill">not started</span></td>
+        <td>Not code.</td>
+      </tr>
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section>
+  <h2><span class="n">08</span> What is not built</h2>
+
+  <h3>The Phase 0 measurement rig</h3>
+  <p>
+    The substrate Phase 1 wraps is here; the rig around it is not. Missing: the Harbor
+    adapter, sweeps with 3 repeats, per-task result rows, and a committed
+    <code>bench/runs/</code> history. Until that exists, "score stayed flat" is
+    <em>unfalsifiable</em> — which is the one claim this phase is supposed to be able
+    to make.
+  </p>
+
+  <h3>Deliberately deferred</h3>
+  <ul>
+    <li><b>Editing tools.</b> Phase 1 ships bash-only so that every tool added in Phase 2 carries a measured delta. The scheduler already classifies <code>read</code>/<code>grep</code>/<code>ls</code> and <code>edit</code>/<code>write</code>, so they slot in without rework.</li>
+    <li><b>A SQLite index.</b> The rebuildable JSONL index answers the queries that exist today without a C dependency. Swap it when the query load justifies it.</li>
+    <li><b>A real tokenizer.</b> The estimate only gates compaction and errs high; the provider's reported usage is ground truth, and both numbers are recorded per request so drift is measurable rather than suspected.</li>
+  </ul>
+
+  <h3>Recommended next</h3>
+  <p>
+    Backfill the Phase 0 rig before starting Phase 2. It is roughly two weeks, it
+    unblocks the one exit criterion that is genuinely blocked, and every phase after
+    this one is harder to justify without a baseline to move.
+  </p>
+</section>
+
+<footer>
+  TRACE — Phase 1 report. Generated 18 Aug 2026.<br>
+  Companion to the build spec and phase manual (kept locally, not committed).
+</footer>
+
+</div>
+</body>
+</html>

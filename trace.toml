@@ -1,0 +1,56 @@
+# TRACE session config.
+#
+# This file is an input to `build_context`, which means it is part of the
+# determinism contract: a session records the hash of the config it ran under,
+# and replaying with a different one is a legitimate ablation but never a
+# silent one.
+
+[model]
+name = "gpt-4.1-mini"
+# Any OpenAI-compatible endpoint: the vendor's, a gateway, or the vLLM server
+# that will host the Phase 4 fine-tune.
+base_url = "https://api.openai.com/v1"
+# The variable name only. The key never enters config, the log, or the context.
+api_key_env = "OPENAI_API_KEY"
+# Pinned. Unpinned temperature turns score variance into noise you cannot
+# attribute to anything.
+temperature = 0.0
+context_limit = 128000
+price_in_per_mtok = 0.40
+price_out_per_mtok = 1.60
+price_cached_in_per_mtok = 0.10
+
+[limits]
+max_turns = 60
+# Per task, not per run. A per-run cap is how a sweep costs 5x the estimate
+# before anything trips.
+max_usd = 2.00
+tool_timeout_ms = 120000
+
+[context]
+compact_at = 0.75
+keep_recent = 6
+# Byte budget for one tool result as rendered into context. The log keeps the
+# full output, so this is adjustable at replay time.
+truncate_limit = 8000
+# Objective-and-status frame after each tool result. Off by default because it
+# is one of the cleanest ablations available.
+reinforce = false
+
+[guards]
+loop_window = 8
+loop_threshold = 3
+
+[prompt]
+system = """
+You are a software engineer working in a terminal on a real repository.
+
+You have one tool: bash. Use it for everything - reading files, searching,
+editing, running tests, installing dependencies.
+
+- Verify before you claim. Run the tests.
+- Prefer small checkable steps over large speculative ones.
+- If a command fails, read the error before trying again.
+- When the task is complete and verified, say so and stop.
+
+Working directory: {cwd}"""
