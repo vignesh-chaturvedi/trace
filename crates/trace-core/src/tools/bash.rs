@@ -46,6 +46,14 @@ pub fn run_bash(cmd: &str, cwd: &Path, timeout: Duration) -> Result<BashOutcome>
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
 
+    // A scrubbed environment, built from an allowlist. The tool process never
+    // sees an API key, so "dump env and grep for key-shaped strings" finds
+    // nothing — and it stays true for credentials nobody thought to name.
+    command.env_clear();
+    for (k, v) in crate::secrets::scrubbed_env() {
+        command.env(k, v);
+    }
+
     #[cfg(unix)]
     {
         use std::os::unix::process::CommandExt;

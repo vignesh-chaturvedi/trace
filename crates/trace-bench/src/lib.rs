@@ -9,13 +9,16 @@
 //! them.
 
 pub mod adapter;
+pub mod bundle;
 pub mod container;
 pub mod report;
 pub mod result;
+pub mod scan;
 pub mod sweep;
 pub mod task;
 
 pub use adapter::{Adapter, LocalAdapter, Verdict};
+pub use bundle::Bundle;
 pub use container::{ContainerAdapter, ContainerConfig, MOUNT};
 pub use result::{aggregate, Aggregate, TaskResult};
 pub use sweep::{run_sweep, SweepOptions, SweepReport, MIN_REPEATS};

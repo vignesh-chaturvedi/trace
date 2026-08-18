@@ -24,6 +24,7 @@ pub mod event;
 pub mod hash;
 pub mod log;
 pub mod message;
+pub mod policy;
 pub mod provider;
 pub mod runtime;
 pub mod secrets;

@@ -1,4 +1,4 @@
-.PHONY: build test lint fmt check clean install bench bench-smoke
+.PHONY: build test lint fmt check clean install bench bench-smoke contribute preflight
 
 build:
 	cargo build --release
@@ -29,6 +29,27 @@ bench:
 # One task, three repeats. For shaking out the rig before spending on a sweep.
 bench-smoke:
 	cargo run --release --bin trace -- bench run --repeats 3 --limit 1
+
+# Check everything that could waste a paid sweep, before running one.
+# Costs 2 API requests.
+preflight:
+	@cargo build --release
+	@./target/release/trace bench preflight --container
+
+# For someone running this on the project's behalf with their own API key.
+# Produces ONE file to send back. Nothing is committed, nothing is pushed.
+#
+# Preflight runs first and stops the build on failure, so a setup mistake
+# costs two requests rather than an hour and a budget.
+contribute: preflight
+	./target/release/trace bench run --repeats 3 --container \
+	  --bundle trace-results.md
+	@echo
+	@echo "=================================================================="
+	@echo "  DONE."
+	@echo "  Send this one file back:  trace-results.md"
+	@echo "  Do not commit or push it."
+	@echo "=================================================================="
 
 install:
 	cargo install --path crates/trace-cli

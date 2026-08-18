@@ -14,3 +14,7 @@ bench/runs/**/workspace/
 .env
 .env.*
 !.env.example
+
+# A returned result belongs in bench/runs, not loose in the tree.
+/trace-results.md
+/trial.md

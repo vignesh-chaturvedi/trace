@@ -10,6 +10,7 @@ use std::sync::{Arc, OnceLock};
 use anyhow::{bail, Context as _, Result};
 use clap::{Parser, Subcommand};
 
+use trace_bench::Task;
 use trace_core::config::Config;
 use trace_core::context::{build_context, lint};
 use trace_core::event::{Body, Outcome};
@@ -130,12 +131,50 @@ enum BenchCmd {
         /// Image for --container.
         #[arg(long, default_value = "python:3.12-slim")]
         image: String,
+        /// Also write a single shareable file summarizing the sweep.
+        #[arg(long)]
+        bundle: Option<PathBuf>,
+    },
+
+    /// Check everything that could waste a paid sweep, before running one.
+    Preflight {
+        #[arg(long, default_value = "tasks")]
+        tasks: PathBuf,
+        /// Also check the container runtime and that a bind mount is visible.
+        #[arg(long)]
+        container: bool,
+        #[arg(long, default_value = "python:3.12-slim")]
+        image: String,
+        /// Skip the two-request live handshake (checks nothing about the key).
+        #[arg(long)]
+        offline: bool,
     },
 
     /// Summarize a finished sweep.
     Report { dir: PathBuf },
 
+    /// Package a finished sweep as one shareable file.
+    Bundle {
+        dir: PathBuf,
+        #[arg(long, default_value = "trace-results.md")]
+        out: PathBuf,
+        #[arg(long, default_value = "tasks")]
+        tasks: PathBuf,
+        /// Write even if the secret scan objects.
+        #[arg(long)]
+        allow_suspected_secrets: bool,
+    },
+
+    /// Read a bundle someone sent back.
+    Import {
+        file: PathBuf,
+        #[arg(long, default_value = "tasks")]
+        tasks: PathBuf,
+    },
+
     /// Is the candidate within noise of the baseline?
+    ///
+    /// Either side may be a sweep directory or a bundle file.
     Compare {
         baseline: PathBuf,
         candidate: PathBuf,
@@ -423,6 +462,7 @@ fn bench(cfg: Config, cmd: BenchCmd) -> Result<()> {
             fixture,
             container,
             image,
+            bundle,
         } => {
             let findings = lint::lint(&cfg, &Default::default());
             if lint::has_errors(&findings) {
@@ -433,6 +473,7 @@ fn bench(cfg: Config, cmd: BenchCmd) -> Result<()> {
             }
 
             let tasks = Task::load_all(&tasks)?;
+            let tasks_for_bundle = tasks.clone();
             let opts = SweepOptions {
                 repeats,
                 limit,
@@ -482,6 +523,10 @@ fn bench(cfg: Config, cmd: BenchCmd) -> Result<()> {
             println!("\n{}", bench_report::summary(&report.aggregate));
             println!("results        {}", report.dir.display());
 
+            if let Some(out) = bundle {
+                write_bundle(&report.dir, &tasks_for_bundle, &out, false)?;
+            }
+
             // Exit non-zero when the harness itself misbehaved, so CI notices
             // a broken rig rather than reading a deflated score as a result.
             if report.aggregate.harness_errors > 0 {
@@ -490,21 +535,337 @@ fn bench(cfg: Config, cmd: BenchCmd) -> Result<()> {
             Ok(())
         }
 
+        BenchCmd::Preflight {
+            tasks,
+            container,
+            image,
+            offline,
+        } => preflight(&cfg, &tasks, container, &image, !offline),
+
         BenchCmd::Report { dir } => {
             let agg = read_aggregate(&dir)?;
             println!("{}", bench_report::summary(&agg));
             Ok(())
         }
 
+        BenchCmd::Bundle {
+            dir,
+            out,
+            tasks,
+            allow_suspected_secrets,
+        } => {
+            let tasks = Task::load_all(&tasks)?;
+            write_bundle(&dir, &tasks, &out, allow_suspected_secrets)
+        }
+
+        BenchCmd::Import { file, tasks } => import_bundle(&file, &tasks),
+
         BenchCmd::Compare {
             baseline,
             candidate,
         } => {
-            let a = read_aggregate(&baseline)?;
-            let b = read_aggregate(&candidate)?;
+            let a = aggregate_of(&baseline)?;
+            let b = aggregate_of(&candidate)?;
             println!("{}", bench_report::compare(&a, &b));
             Ok(())
         }
+    }
+}
+
+/// Everything that can waste a sweep, checked before the sweep.
+///
+/// The failure this exists to prevent: someone spends an hour and their API
+/// budget, and the result turns out to be unusable for a reason that was
+/// knowable in ten seconds — a placeholder model id, a container whose mount
+/// is empty, a key that was never valid. The live handshake costs two
+/// requests to protect roughly three hundred.
+fn preflight(
+    cfg: &Config,
+    tasks_dir: &Path,
+    container: bool,
+    image: &str,
+    live: bool,
+) -> Result<()> {
+    // A Cell rather than a plain counter: the closure borrows it for the whole
+    // function, and the live check needs to read the count to decide whether
+    // spending a request is worthwhile.
+    let failed = std::cell::Cell::new(0usize);
+    let check = |name: &str, outcome: std::result::Result<String, String>| match outcome {
+        Ok(detail) => println!("  ok    {name:<26} {detail}"),
+        Err(why) => {
+            failed.set(failed.get() + 1);
+            println!("  FAIL  {name:<26} {why}");
+        }
+    };
+
+    println!(
+        "preflight
+"
+    );
+
+    // 1. A key, under the name the config actually reads.
+    let var = &cfg.model.api_key_env;
+    check(
+        "api key",
+        match std::env::var(var) {
+            Ok(v) if v.trim().is_empty() => Err(format!("{var} is set but empty")),
+            Ok(v) if v.contains("paste-your-key") => Err(format!(
+                "{var} still holds the placeholder from .env.example"
+            )),
+            Ok(v) => Ok(format!("{var} is set ({} chars)", v.trim().len())),
+            Err(_) => Err(format!(
+                "{var} is not set. Run: cp .env.example .env, then paste your key"
+            )),
+        },
+    );
+
+    // 2. A real model id. A placeholder fails with a 404 that reads like auth.
+    check(
+        "model id",
+        if cfg.model.name.contains("PUT-THE") || cfg.model.name.trim().is_empty() {
+            Err(format!(
+                "{:?} is a placeholder; set model.name to a real id",
+                cfg.model.name
+            ))
+        } else {
+            Ok(cfg.model.name.clone())
+        },
+    );
+
+    // 3. The cacheable prefix still holds.
+    let findings = lint::lint(cfg, &Default::default());
+    check(
+        "layout lint",
+        if lint::has_errors(&findings) {
+            Err("prefix is not stable; run `trace lint`".into())
+        } else {
+            Ok(format!("{} warning(s)", findings.len()))
+        },
+    );
+
+    // 4. Tasks load, and the set is identified so a returned result is
+    //    comparable to the right baseline.
+    let loaded = Task::load_all(tasks_dir);
+    check(
+        "tasks",
+        match &loaded {
+            Ok(t) => Ok(format!(
+                "{} task(s), set {}",
+                t.len(),
+                &trace_bench::bundle::task_set_hash(t)[..12]
+            )),
+            Err(e) => Err(e.to_string()),
+        },
+    );
+
+    // 5. The container runtime, and the trap that silently empties a mount.
+    if container {
+        check(
+            "container runtime",
+            trace_core::tools::exec::runtime_available("docker")
+                .map(|_| "docker responding".to_string())
+                .map_err(|e| e.to_string()),
+        );
+
+        check("workspace mount", check_mount(image));
+    }
+
+    // 6. The only check that costs anything: does the whole loop work?
+    if live && failed.get() == 0 {
+        check("live api handshake", live_handshake(cfg));
+    } else if live {
+        println!("  skip  live api handshake      earlier checks failed");
+    }
+
+    println!();
+    let failed = failed.get();
+    if failed == 0 {
+        println!("ready. `make contribute` will not waste your budget on a setup problem.");
+        Ok(())
+    } else {
+        bail!("{failed} check(s) failed; fix them before running a sweep")
+    }
+}
+
+/// Start a throwaway container and confirm the bind mount is actually visible.
+fn check_mount(image: &str) -> std::result::Result<String, String> {
+    use trace_bench::container::{ContainerAdapter, ContainerConfig};
+    use trace_bench::Adapter;
+
+    let dir = std::env::current_dir()
+        .map_err(|e| e.to_string())?
+        .join("target/preflight-mount");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+
+    let adapter = ContainerAdapter::new(ContainerConfig {
+        image: image.to_string(),
+        ..Default::default()
+    })
+    .map_err(|e| e.to_string())?;
+
+    let outcome = adapter
+        .executor(&dir)
+        .map(|_| "visible at /workspace".to_string());
+    adapter.cleanup(&dir);
+    let _ = std::fs::remove_dir_all(&dir);
+
+    outcome.map_err(|e| e.to_string())
+}
+
+/// Two requests that exercise the whole multi-turn tool loop.
+///
+/// One request would prove the key works. Two prove the loop works, which is
+/// a different and more useful claim: a provider that needs an opaque token
+/// echoed back on the second turn fails only there, and finding that out on
+/// request 2 rather than request 40 is the entire point.
+fn live_handshake(cfg: &Config) -> std::result::Result<String, String> {
+    use trace_core::message::Message;
+    use trace_core::provider::{Flow, Request};
+    use trace_core::tools::schema::{registry, schemas_json};
+
+    let provider = provider_for(cfg, None, None).map_err(|e| e.to_string())?;
+    let tools = schemas_json(&registry());
+
+    let mut messages = vec![
+        Message::system("You are a terminal agent. Use the bash tool."),
+        Message::user("Run exactly: echo preflight-ok"),
+    ];
+
+    let first = provider
+        .complete(
+            &Request {
+                model: &cfg.model.name,
+                temperature: cfg.model.temperature,
+                messages: &messages,
+                tools_json: &tools,
+            },
+            &mut |_| Flow::Continue,
+        )
+        .map_err(|e| format!("first request failed: {}", first_line(&e.to_string())))?;
+
+    let calls = first.message.tool_calls.len();
+    messages.push(first.message.clone());
+
+    // Answer whatever it asked for, then go back. This is the turn where a
+    // provider-specific requirement surfaces.
+    if calls == 0 {
+        return Ok("model replied, but did not use the tool (still usable)".to_string());
+    }
+    for call in &first.message.tool_calls {
+        messages.push(Message::tool_result(&call.id, "preflight-ok"));
+    }
+
+    let second = provider
+        .complete(
+            &Request {
+                model: &cfg.model.name,
+                temperature: cfg.model.temperature,
+                messages: &messages,
+                tools_json: &tools,
+            },
+            &mut |_| Flow::Continue,
+        )
+        .map_err(|e| format!("second turn failed: {}", first_line(&e.to_string())))?;
+
+    let cached = second.usage.cached_input;
+    Ok(format!(
+        "2 turns ok, tool calls work, usage reported (cached {cached})"
+    ))
+}
+
+/// Provider errors carry whole JSON bodies; a check line wants one line.
+fn first_line(s: &str) -> String {
+    let line = s.lines().find(|l| !l.trim().is_empty()).unwrap_or(s).trim();
+    if line.len() > 160 {
+        format!("{}...", &line[..160])
+    } else {
+        line.to_string()
+    }
+}
+
+/// Build the shareable file, refusing if it looks like it carries a secret.
+fn write_bundle(
+    dir: &Path,
+    tasks: &[trace_bench::Task],
+    out: &Path,
+    allow_suspected_secrets: bool,
+) -> Result<()> {
+    let bundle = trace_bench::Bundle::from_sweep(dir, tasks)?;
+    let text = bundle.to_markdown();
+
+    let findings = trace_bench::scan::scan(&text);
+    if !findings.is_empty() && !allow_suspected_secrets {
+        bail!("{}", trace_bench::scan::describe(&findings));
+    }
+    if !findings.is_empty() {
+        eprintln!(
+            "trace: writing anyway; {} suspected secret(s) were overridden",
+            findings.len()
+        );
+    }
+
+    std::fs::write(out, &text).with_context(|| format!("writing {}", out.display()))?;
+
+    println!();
+    println!("bundle         {}", out.display());
+    println!("size           {:.1} KB", text.len() as f64 / 1024.0);
+    println!(
+        "secret scan    {}",
+        if findings.is_empty() {
+            "clean"
+        } else {
+            "OVERRIDDEN"
+        }
+    );
+    println!();
+    println!("Send that one file back. It carries no credentials, and you can read it first.");
+    Ok(())
+}
+
+fn import_bundle(file: &Path, tasks: &Path) -> Result<()> {
+    let bundle = trace_bench::Bundle::load(file)?;
+
+    println!("{}", trace_bench::report::summary(&bundle.aggregate));
+    println!("harness commit {}", bundle.manifest.harness_commit);
+    println!("task set       {}", &bundle.task_set_hash[..12]);
+    for (k, v) in &bundle.environment {
+        println!("{k:<14} {v}");
+    }
+
+    // A pass rate against a different set of tasks is a different number
+    // wearing the same clothes.
+    match Task::load_all(tasks) {
+        Ok(local) => {
+            if bundle.matches_task_set(&local) {
+                println!("\ntask set matches this checkout: comparable to a local sweep.");
+            } else {
+                println!(
+                    "\nWARNING: this bundle ran a DIFFERENT task set than this checkout.\n\
+                     Comparing the two pass rates would be meaningless. Check out the commit\n\
+                     it names ({}) before comparing.",
+                    bundle.manifest.harness_commit
+                );
+            }
+        }
+        Err(e) => println!("\ncould not load local tasks to compare against: {e}"),
+    }
+
+    if !bundle.failures.is_empty() {
+        println!("\n{} failure excerpt(s) included:", bundle.failures.len());
+        for f in &bundle.failures {
+            println!("  {} r{} ({} turns)", f.task_id, f.repeat, f.turns);
+        }
+    }
+    Ok(())
+}
+
+/// Accept either a sweep directory or a bundle file.
+fn aggregate_of(target: &Path) -> Result<trace_bench::Aggregate> {
+    if target.is_dir() {
+        read_aggregate(target)
+    } else {
+        Ok(trace_bench::Bundle::load(target)?.aggregate)
     }
 }
 

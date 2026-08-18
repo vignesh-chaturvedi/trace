@@ -7,6 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::error::{Error, Result};
 use crate::event::{Body, Event, Seq};
+use crate::secrets::Redactor;
 
 /// Time, injected.
 ///
@@ -53,6 +54,13 @@ pub struct EventLog {
     session: String,
     next_seq: Seq,
     clock: Arc<dyn Clock>,
+    /// Applied to every line on its way to disk.
+    ///
+    /// Here rather than in a viewer, because this file is the artifact: it
+    /// gets committed, published, and fed to Phase 4 as training data. A
+    /// secret redacted only at display time is still on disk, and by the time
+    /// anyone opens a UI the leak already happened.
+    redactor: Arc<Redactor>,
 }
 
 impl EventLog {
@@ -74,6 +82,7 @@ impl EventLog {
             session: session.into(),
             next_seq: 1,
             clock: Arc::new(SystemClock),
+            redactor: Arc::new(Redactor::new()),
         })
     }
 
@@ -102,12 +111,19 @@ impl EventLog {
             session,
             next_seq,
             clock: Arc::new(SystemClock),
+            redactor: Arc::new(Redactor::new()),
         };
         Ok((log, outcome.events))
     }
 
     pub fn with_clock(mut self, clock: Arc<dyn Clock>) -> Self {
         self.clock = clock;
+        self
+    }
+
+    /// Scrub these secrets from every line written from now on.
+    pub fn with_redactor(mut self, redactor: Arc<Redactor>) -> Self {
+        self.redactor = redactor;
         self
     }
 
@@ -141,6 +157,15 @@ impl EventLog {
             !line.contains('\n'),
             "serde_json escapes newlines; one event must be one line"
         );
+
+        // Last thing before the bytes leave. Redaction cannot introduce a
+        // newline -- the marker is `[redacted:name]` -- so one event is still
+        // one line, and the result is still valid JSON because the
+        // replacement only ever lands inside a string literal.
+        if !self.redactor.is_empty() {
+            line = self.redactor.redact(&line);
+        }
+
         line.push('\n');
 
         self.file
